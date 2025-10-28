@@ -1,0 +1,231 @@
+# =====================================================================
+#               Microarray Analysis - GSE183795 (Corrected Version)
+# =====================================================================
+
+#### 0. Load All Required Packages ####
+cat("Loading all required packages...\n")
+
+library(GEOquery)
+library(affy)
+library(dplyr)
+library(ggplot2)
+library(matrixStats)
+
+cat("✓ All packages loaded successfully!\n")
+
+#### 1. Set Working Directory and Paths ####
+setwd("C:/Users/LENOVO/Documents/AI_Omics_Internship_2025")
+
+data_path <- "data/GSE183795"
+results_path <- "Results"
+cel_path <- file.path(data_path, "GSE183795_RAW")
+
+dir.create(results_path, showWarnings = FALSE)
+
+#### 2. Load Phenotype Data from GEO ####
+cat("Loading phenotype data from GEO...\n")
+
+gse_data <- getGEO("GSE183795", GSEMatrix = TRUE)
+phenotype_data <- pData(gse_data[[1]])
+feature_data <- fData(gse_data[[1]])
+expression_matrix <- exprs(gse_data[[1]])
+
+cat("✓ Phenotype data loaded successfully\n")
+cat("Dataset dimensions:", dim(expression_matrix), "\n")
+
+#### 3. Check CEL Files Situation ####
+cat("\nChecking CEL files situation...\n")
+
+cel_files <- list.files(cel_path, pattern = "\\.CEL$|\\.cel$", 
+                        ignore.case = TRUE, full.names = TRUE)
+
+if(length(cel_files) == 0) {
+  cat("No CEL files found. Using pre-normalized data from GEO.\n")
+  processed_data <- as.data.frame(expression_matrix)
+  use_cel_files <- FALSE
+} else {
+  cat("Found", length(cel_files), "CEL files\n")
+  
+  raw_data <- ReadAffy(filenames = cel_files[1])
+  cat("Single CEL file information:\n")
+  print(raw_data)
+  
+  normalized_data <- rma(raw_data)
+  processed_data <- as.data.frame(exprs(normalized_data))
+  use_cel_files <- TRUE
+}
+
+cat("Working data dimensions:", dim(processed_data), "\n")
+
+#### 4. Use Full Dataset from GEO ####
+cat("Using full dataset from GEO for analysis...\n")
+
+processed_data <- as.data.frame(expression_matrix)
+cat("Full dataset dimensions:", nrow(processed_data), "probes x", ncol(processed_data), "samples\n")
+
+#### 5. Quality Control on Full Data ####
+cat("Performing QC on full dataset...\n")
+
+png(file.path(results_path, "01_Full_Data_Boxplot.png"), width = 1200, height = 800)
+boxplot(processed_data, 
+        main = "Full Dataset Distribution - GSE183795",
+        las = 2, cex.axis = 0.5, col = "lightblue",
+        xlab = "Samples", ylab = "Intensity")
+dev.off()
+
+#### 6. Filter Low-Intensity Probes ####
+cat("Filtering low-intensity probes...\n")
+
+row_median <- rowMedians(as.matrix(processed_data))
+
+png(file.path(results_path, "02_Intensity_Distribution.png"), width = 800, height = 600)
+hist(row_median, breaks = 100, col = "lightblue",
+     main = "Median Intensity Distribution - GSE183795",
+     xlab = "Median Intensity", ylab = "Frequency")
+
+threshold <- quantile(row_median, 0.1)   
+abline(v = threshold, col = "red", lwd = 2, lty = 2)
+legend("topright", 
+       legend = paste("Threshold =", round(threshold, 2)), 
+       col = "red", lwd = 2, lty = 2)
+dev.off()
+
+filtered_data <- processed_data[row_median > threshold, ]
+cat("Before filtering:", nrow(processed_data), "probes\n")
+cat("After filtering:", nrow(filtered_data), "probes remaining\n")
+cat("Filtered out:", nrow(processed_data) - nrow(filtered_data), "probes\n")
+
+processed_data <- filtered_data
+
+#### 7. Prepare Experimental Groups ####
+cat("Preparing experimental groups...\n")
+
+groups <- ifelse(grepl("tumor", phenotype_data$source_name_ch1, ignore.case = TRUE), 
+                 "Tumor", "Normal")
+
+groups <- factor(groups)
+cat("Simplified groups:\n")
+print(table(groups))
+
+group_info <- data.frame(
+  Sample = colnames(processed_data),
+  Original_Group = phenotype_data$source_name_ch1,
+  Simplified_Group = groups
+)
+
+#### 8. Save Processed Data ####
+cat("Saving processed data...\n")
+
+# حفظ بيانات R
+save(processed_data, groups, phenotype_data, feature_data, group_info,
+     file = file.path(results_path, "GSE183795_processed.RData"))
+
+write.csv(processed_data, file.path(results_path, "GSE183795_expression_matrix.csv"))
+
+write.csv(phenotype_data, file.path(results_path, "GSE183795_phenotype_data.csv"))
+
+write.csv(group_info, file.path(results_path, "GSE183795_group_info.csv"), row.names = FALSE)
+
+#### 9. Generate Final Summary Report ####
+cat("Generating final summary report...\n")
+
+summary_report <- data.frame(
+  Metric = c("Total Samples", 
+             "Total Probes (Before Filtering)", 
+             "Probes After Filtering", 
+             "Probes Filtered Out",
+             "Filtering Threshold",
+             "Number of Experimental Groups",
+             "Tumor Samples",
+             "Normal Samples",
+             "Data Source"),
+  Value = c(ncol(processed_data),
+            nrow(expression_matrix),
+            nrow(processed_data),
+            nrow(expression_matrix) - nrow(processed_data),
+            round(threshold, 3),
+            length(unique(groups)),
+            sum(groups == "Tumor"),
+            sum(groups == "Normal"),
+            "GEO Normalized Matrix")
+)
+
+cat("\n", rep("=", 60), "\n", sep = "")
+cat("ANALYSIS SUMMARY - GSE183795\n")
+cat(rep("=", 60), "\n", sep = "")
+print(summary_report)
+cat(rep("=", 60), "\n\n", sep = "")
+
+write.csv(summary_report, file.path(results_path, "analysis_summary.csv"), row.names = FALSE)
+
+#### 10. Create Visualization Plots ####
+cat("Creating visualization plots...\n")
+
+# PCA Plot
+tryCatch({
+  set.seed(123)
+  if(nrow(processed_data) > 1000) {
+    pca_sample <- processed_data[sample(1:nrow(processed_data), 1000), ]
+  } else {
+    pca_sample <- processed_data
+  }
+  
+  pca_data <- t(scale(pca_sample))
+  pca_result <- prcomp(pca_data, scale. = FALSE)
+  
+  pca_df <- as.data.frame(pca_result$x)
+  pca_df$Group <- groups
+  
+  variance_explained <- round(summary(pca_result)$importance[2, 1:2] * 100, 1)
+  
+  png(file.path(results_path, "03_PCA_Plot.png"), width = 800, height = 600)
+  print(
+    ggplot(pca_df, aes(x = PC1, y = PC2, color = Group)) +
+      geom_point(size = 2, alpha = 0.7) +
+      theme_minimal() +
+      ggtitle("PCA Plot - GSE183795 (Pancreatic Cancer)") +
+      labs(x = paste0("PC1 (", variance_explained[1], "%)"),
+           y = paste0("PC2 (", variance_explained[2], "%)")) +
+      scale_color_manual(values = c("Normal" = "blue", "Tumor" = "red"))
+  )
+  dev.off()
+  cat("✓ PCA plot saved\n")
+}, error = function(e) {
+  cat("✗ Could not create PCA plot:", e$message, "\n")
+})
+
+# Boxplot by group
+tryCatch({
+  plot_data <- data.frame(
+    Intensity = as.vector(as.matrix(processed_data)),
+    Group = rep(groups, each = nrow(processed_data))
+  )
+  
+  png(file.path(results_path, "04_Group_Boxplot.png"), width = 800, height = 600)
+  print(
+    ggplot(plot_data, aes(x = Group, y = Intensity, fill = Group)) +
+      geom_boxplot(alpha = 0.7) +
+      theme_minimal() +
+      ggtitle("Expression Distribution by Group - GSE183795") +
+      scale_fill_manual(values = c("Normal" = "lightblue", "Tumor" = "lightcoral"))
+  )
+  dev.off()
+  cat("✓ Group boxplot saved\n")
+}, error = function(e) {
+  cat("✗ Could not create group boxplot:", e$message, "\n")
+})
+
+cat("\n🎉 ANALYSIS COMPLETED SUCCESSFULLY! 🎉\n")
+cat("📁 Results saved in:", normalizePath(results_path), "\n")
+cat("📊 Generated files:\n")
+cat("   - 01-04_*.png: QC and visualization plots\n")
+cat("   - GSE183795_expression_matrix.csv: Expression data\n")
+cat("   - GSE183795_phenotype_data.csv: Sample information\n")
+cat("   - GSE183795_group_info.csv: Group assignments\n")
+cat("   - analysis_summary.csv: Analysis summary\n")
+cat("   - GSE183795_processed.RData: R data file\n")
+cat("\n📈 Dataset Summary:\n")
+cat("   - This is a pancreatic cancer dataset\n")
+cat("   - Contains", sum(groups == "Tumor"), "tumor samples\n")
+cat("   - Contains", sum(groups == "Normal"), "normal samples\n")
+cat("   - Platform: HuGene-1_0-st-v1\n")
