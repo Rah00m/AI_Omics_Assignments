@@ -1,0 +1,18 @@
+ANALYSIS SUMMARY - GSE183795
+============================================================
+1. PROBE-TO-GENE MAPPING:
+   - Initial probes: 17320
+   - Probes with gene symbols: 16492
+   - Final unique genes after averaging: 16364
+   - Multiple probes mapping to same gene were handled by averaging expression values
+
+2. DIFFERENTIAL EXPRESSION ANALYSIS:
+   - Comparison: Tumor vs Normal (Pancreatic Cancer)
+   - Upregulated genes: 4
+   - Downregulated genes: 14
+   - Total significant DEGs: 18
+   - Criteria: |logFC| > 1 and adj.P.Val < 0.05
+
+3. NOTE:
+   - Significant class imbalance: 241 Tumor vs 3 Normal samples
+   - This may affect statistical power and interpretation
