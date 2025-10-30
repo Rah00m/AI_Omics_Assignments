@@ -1,6 +1,3 @@
-# =====================================================================
-#               Microarray Analysis - GSE183795 (Corrected Version)
-# =====================================================================
 
 #### 0. Load All Required Packages ####
 cat("Loading all required packages...\n")
@@ -215,17 +212,18 @@ tryCatch({
   cat("✗ Could not create group boxplot:", e$message, "\n")
 })
 
-cat("\n🎉 ANALYSIS COMPLETED SUCCESSFULLY! 🎉\n")
-cat("📁 Results saved in:", normalizePath(results_path), "\n")
-cat("📊 Generated files:\n")
+cat("\n ANALYSIS COMPLETED SUCCESSFULLY! \n")
+cat("Results saved in:", normalizePath(results_path), "\n")
+cat("Generated files:\n")
 cat("   - 01-04_*.png: QC and visualization plots\n")
 cat("   - GSE183795_expression_matrix.csv: Expression data\n")
 cat("   - GSE183795_phenotype_data.csv: Sample information\n")
 cat("   - GSE183795_group_info.csv: Group assignments\n")
 cat("   - analysis_summary.csv: Analysis summary\n")
 cat("   - GSE183795_processed.RData: R data file\n")
-cat("\n📈 Dataset Summary:\n")
+cat("\n Dataset Summary:\n")
 cat("   - This is a pancreatic cancer dataset\n")
 cat("   - Contains", sum(groups == "Tumor"), "tumor samples\n")
 cat("   - Contains", sum(groups == "Normal"), "normal samples\n")
+
 cat("   - Platform: HuGene-1_0-st-v1\n")
